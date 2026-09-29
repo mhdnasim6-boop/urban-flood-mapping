@@ -1,0 +1,3 @@
+# D: proposed model - raw + physics + terrain/water (17 channels).
+base: ../default.yaml
+channels: ["@raw", "@phys", "@aux"]

@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.ipynb_checkpoints/
+# data and outputs never go into git
+data/
+runs/
+report/
+*.tif
+*.pt
+*.pkl
+*.npz

@@ -1,0 +1,5 @@
+# B5: dataset authors' setup - 8 raw bands, weighted cross-entropy, no oversampling.
+base: ../default.yaml
+channels: ["@raw"]
+loss: {name: wce}
+data: {category_shares: null, focus_prob: 0.0}

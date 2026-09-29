@@ -1,0 +1,3 @@
+# C: raw + HAND/slope/permanent water. C vs A = effect of terrain/water context.
+base: ../default.yaml
+channels: ["@raw", "@aux"]

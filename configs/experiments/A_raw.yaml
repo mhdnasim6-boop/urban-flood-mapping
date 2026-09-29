@@ -1,0 +1,4 @@
+# A: 8 raw bands with the proposed training recipe (focal+Dice, oversampling).
+# A vs B5 isolates the effect of the training recipe.
+base: ../default.yaml
+channels: ["@raw"]

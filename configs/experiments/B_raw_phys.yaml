@@ -1,0 +1,3 @@
+# B: raw + physics features. B vs A = effect of physics features.
+base: ../default.yaml
+channels: ["@raw", "@phys"]

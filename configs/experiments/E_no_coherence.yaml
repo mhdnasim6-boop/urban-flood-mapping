@@ -1,0 +1,4 @@
+# E: D without any coherence information. D vs E = value of InSAR coherence.
+base: ../default.yaml
+channels: [int_pre_vh, int_pre_vv, int_post_vh, int_post_vv,
+           d_int_vv, d_int_vh, xpol_post, "@aux"]

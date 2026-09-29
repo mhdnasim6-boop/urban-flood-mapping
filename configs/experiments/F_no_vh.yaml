@@ -1,0 +1,4 @@
+# F: D without any VH information. D vs F = value of cross-polarisation.
+base: ../default.yaml
+channels: [coh_pre_vv, coh_co_vv, int_pre_vv, int_post_vv,
+           d_int_vv, d_coh_vv_norm, ufi_vv, "@aux"]

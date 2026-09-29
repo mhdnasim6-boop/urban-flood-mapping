@@ -1,0 +1,42 @@
+# Shared settings. Each file in configs/experiments/ inherits from this and
+# overrides only what that experiment changes.
+
+data:
+  trainval_root: data/trainval      # overridden with --data-root on Kaggle
+  test_root: data/test
+  crop: 256                         # random 256x256 crops from 512x512 chips
+  focus_prob: 0.5                   # share of crops centred on a flood pixel
+  category_shares:                  # chip-category share per epoch (oversampling)
+    01_NF: 0.34
+    02_FO: 0.33
+    03_FU: 0.33
+  num_workers: 4
+
+# Input channels, see src/ufm/bands.py. Groups: @raw (1-8), @phys (9-14), @aux (15-17)
+channels: ["@raw", "@phys", "@aux"]
+
+model:
+  encoder: resnet34
+  encoder_weights: imagenet
+  dropout: 0.2                      # decoder dropout, reused for MC-dropout
+
+loss:
+  name: focal_dice                  # focal_dice | wce
+  gamma: 2.0
+  dice_weight: 1.0
+
+train:
+  epochs: 40
+  batch_size: 16
+  lr: 3.0e-4
+  weight_decay: 1.0e-4
+  warmup_epochs: 1
+  amp: true
+  val_every: 2
+  patience: 6                       # validation rounds without improvement
+  select_metric: flood_mean_f1      # mean F1 of flooded-open and flooded-urban
+  seed: 42
+
+eval:
+  mc_samples: 20
+  batch_size: 32
