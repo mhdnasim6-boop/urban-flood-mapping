@@ -115,7 +115,7 @@ def map_figure(event, test_root, run_dirs, out, size=1024):
     win = best_window(gt_path, size)
     panels = [("Post-event VV (dB)", sar_window(Path(test_root) / event, gt_path, win), "sar")]
     with rasterio.open(gt_path) as g:
-        panels.append(("Reference (manual)", g.read(1, window=win, boundless=True, fill_value=255), "cls"))
+        panels.append(("Reference", g.read(1, window=win, boundless=True, fill_value=255), "cls"))
     for m in [m for m in ORDER if m in run_dirs and m != "D_full_mc"]:
         p = run_dirs[m] / f"{event}_pred.tif"
         if p.exists():

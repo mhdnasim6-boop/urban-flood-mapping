@@ -3,8 +3,8 @@
 MTech thesis project. Maps **flooded open areas** and **flooded urban areas** from Sentinel-1 SAR by
 fusing dual-polarisation (VV/VH) backscatter intensity and InSAR coherence with physics-guided change
 features and terrain/water context. A U-Net is trained with an imbalance-aware loss and gives
-per-pixel uncertainty through Monte-Carlo dropout. Accuracy is measured on three flood events whose
-reference maps were drawn by hand from optical imagery and never used for training.
+per-pixel uncertainty through Monte-Carlo dropout. Accuracy is measured on three held-out flood events
+(Weihui, Nova Kakhovka, Jubba) that were never used for training or model selection.
 
 ## Research gap addressed
 
@@ -21,7 +21,7 @@ From the review by Zhao et al. (2025, IEEE GRSM) and the UrbanSARFloods benchmar
 Contribution: physics-guided features (event-normalised coherence drop, intensity change, cross-pol
 ratio, urban flooding index) plus terrain/water priors (HAND, slope, JRC water occurrence), focal + Dice
 loss with class-aware sampling, MC-dropout uncertainty, and a controlled ablation against five baselines,
-evaluated on independent manually labelled events.
+evaluated on held-out flood events.
 
 ## Input channels
 
@@ -66,8 +66,13 @@ All U-Nets share architecture (ResNet-34 encoder, ImageNet weights), optimiser a
   flooded-urban pixels lose coherence from 0.61/0.79 (bands 1-2) to 0.21/0.25 (bands 3-4).
 - **Training labels are semi-automatic.** They were made with an intensity-change threshold, a fixed 0.3
   coherence threshold and the WSF2019 settlement mask. So B2 mirrors the labelling rule, and built-up maps
-  are deliberately **not** used as inputs, because that would leak the labels. Final accuracy comes only from the
-  manually labelled test events (Weihui, Nova Kakhovka, Jubba).
+  are deliberately **not** used as inputs, because that would leak the labels.
+- **Test labels are also semi-automatic.** The published test reference maps cover the whole Sentinel-1
+  frame. The paper states that full-frame labels were made with the same semi-automatic procedure
+  (thresholds adjusted case by case by analysts). Manual labels from PlanetScope/UAV imagery exist only
+  for small subsets and are not published separately. The authors report no significant difference
+  between evaluating on the two. The test therefore measures generalisation to unseen events against
+  an analyst-supervised reference, not against independent ground truth.
 - **Missing test chips.** 997 of the 2,029 published `20231201_Jubba_2` test chips are empty files on
   Hugging Face. They are skipped, and Jubba_2 is evaluated on the remaining 1,032 chips.
 - **Storage.** Intensity is stored in 0.2 dB steps and coherence in 1/254 steps (uint8). Both are far
@@ -110,7 +115,7 @@ configs/default.yaml            shared settings
 configs/experiments/*.yaml      one file per experiment (B5, A-F)
 src/ufm/                        library: bands, features, data, model, losses, metrics, baselines, aux layers
 scripts/prepare_train.py        stream + compress train/val archive
-scripts/prepare_test.py         download manually labelled test events
+scripts/prepare_test.py         download the held-out test events
 scripts/build_aux.py            HAND, slope, JRC water per chip
 scripts/compute_stats.py        normalisation statistics
 scripts/train.py                train one experiment

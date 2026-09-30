@@ -1,4 +1,4 @@
-"""Evaluate a trained run on the manually labelled test events.
+"""Evaluate a trained run on the held-out test events.
 
     python scripts/evaluate.py --run runs/D_full --test-root /kaggle/input/ufm-test --mc 20
 

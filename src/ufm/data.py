@@ -3,7 +3,7 @@
 Train/val: <root>/{01_NF,02_FO,03_FU}/{SAR,GT,AUX}/, split by the official
 Train_dataset.txt / Valid_dataset.txt lists.
 Test:      <root>/<event>/{SAR,AUX}/ chips + <root>/<event>/GT_full.tif
-           (manually labelled full-event reference, windowed per chip).
+           (full-frame reference map, windowed per chip).
 """
 from dataclasses import dataclass
 from pathlib import Path

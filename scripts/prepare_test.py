@@ -1,7 +1,7 @@
-"""Download the three manually labelled test events (four image-label pairs).
+"""Download the three held-out test events (four image-label pairs).
 
-These events were never used for training and their labels were drawn by hand
-from PlanetScope / UAV imagery, so they give an independent accuracy estimate.
+These events were never used for training or model selection. Their full-frame
+reference maps come from the dataset's semi-automatic, analyst-supervised labelling.
 
     python scripts/prepare_test.py --out data/test [--max-chips 40 --events 20231201_Jubba_1]
 

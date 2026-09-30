@@ -1,6 +1,6 @@
 """Band layout of UrbanSARFloods chips and the compact uint8/uint16 storage format.
 
-Band order was verified against the manually labelled Jubba test labels (see
+Band order was verified against the Jubba test reference labels (see
 README, "Band order"). The paper text lists intensity first, but the GeoTIFFs
 store coherence first, and VH before VV inside each pair.
 """
