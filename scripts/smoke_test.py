@@ -76,8 +76,16 @@ def main():
             "--device", args.device, "--workers", 0, "--batch", 8)
     run("scripts/evaluate.py", "--run", runs / "D_full", "--test-root", test, "--mc", 3, "--tag", "mc",
         "--device", args.device, "--workers", 0, "--batch", 8)
+    # an extra random seed, evaluated without maps (as in the Kaggle notebook)
+    run("scripts/train.py", "--config", "configs/experiments/D_full.yaml", "--data-root", tv,
+        "--out", runs, "--device", args.device, "train.epochs=1", "train.val_every=1",
+        "train.batch_size=4", "data.num_workers=0", "train.seed=1", "name=D_full_s1")
+    run("scripts/evaluate.py", "--run", runs / "D_full_s1", "--test-root", test, "--mc", 0, "--no-maps",
+        "--device", args.device, "--workers", 0, "--batch", 8)
     run("scripts/run_baselines.py", "--test-root", test, "--trainval-root", tv, "--out", runs / "baselines",
         "--rf-device", "cpu", "--rf-max-chips", 30, "--workers", 0)
+    run("scripts/uncertainty_analysis.py", "--maps", runs / "D_full" / "test_mc", "--test-root", test,
+        "--out", w / "report")
     run("scripts/summarize.py", "--runs", runs, "--test-root", test, "--out", w / "report")
     print("\nsmoke test passed")
 

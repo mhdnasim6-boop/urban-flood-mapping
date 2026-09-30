@@ -24,14 +24,14 @@ def load_config(path, overrides=()):
     name = cfg.pop("name", path.stem)
     if "base" in cfg:
         cfg = _merge(load_config(path.parent / cfg.pop("base")), cfg)
-    for o in overrides:
+    cfg["name"] = name
+    for o in overrides:  # after the name, so name=<run name> can be overridden too
         key, val = o.split("=", 1)
         node = cfg
         *parents, last = key.split(".")
         for p in parents:
             node = node.setdefault(p, {})
-        node[last] = yaml.safe_load(val)
-    cfg["name"] = name
+        node[last] = val if key == "name" else yaml.safe_load(val)
     cfg["channels"] = expand_channels(cfg["channels"])
     return cfg
 

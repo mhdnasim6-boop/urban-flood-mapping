@@ -4,8 +4,14 @@
 
 Writes: comparison.csv / comparison.md (all methods x events), f1_bars.png,
 and maps_<event>.png (SAR, reference, every method, probability, uncertainty).
+
+Pooled scores are recomputed from the per-event confusion matrices, leaving out
+any --exclude-events. Runs named <method>_s<k> are extra random seeds of
+<method>: the table reports their mean and standard deviation.
 """
 import argparse
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -21,6 +27,9 @@ from rasterio.windows import Window, from_bounds  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from ufm.bands import decode_sar  # noqa: E402
+from ufm.metrics import Confusion  # noqa: E402
+
+SEED_RE = re.compile(r"^(.*)_s\d+$")
 
 ORDER = ["B1", "B2", "B3", "B4", "B5_authors_baseline", "A_raw", "B_raw_phys", "C_raw_aux",
          "D_full", "D_full_mc", "E_no_coherence", "F_no_vh"]
@@ -36,40 +45,71 @@ LABELS = {
 CLASS_CMAP = ListedColormap(["#f2f2f2", "#1f77b4", "#d62728"])
 
 
-def find_metrics(runs):
+def base_method(m):
+    k = SEED_RE.match(m)
+    return k.group(1) if k else m
+
+
+def find_runs(runs):
+    """{method: folder} for every folder holding test_metrics.csv + confusion.json."""
     files = list(Path(runs).glob("*/test*/test_metrics.csv")) + list(Path(runs).glob("baselines/*/test/test_metrics.csv"))
-    dfs = [pd.read_csv(f) for f in files]
-    run_dirs = {d["method"].iloc[0]: f.parent for d, f in zip(dfs, files)}
-    df = pd.concat(dfs, ignore_index=True)
-    df["order"] = df["method"].map({m: i for i, m in enumerate(ORDER)}).fillna(99)
-    return df.sort_values(["order", "event"]), run_dirs
+    return {pd.read_csv(f, nrows=1)["method"].iloc[0]: f.parent for f in files}
 
 
-def comparison_table(df, out):
-    pooled = df[df.event == "ALL"].set_index("method")
+def metrics_table(run_dirs, exclude):
+    rows = []
+    for method, folder in run_dirs.items():
+        pooled = Confusion()
+        for ev, m in json.loads((folder / "confusion.json").read_text()).items():
+            if ev == "ALL":
+                continue
+            c = Confusion()
+            c.m = np.array(m, dtype=np.int64)
+            rows.append({"method": method, "event": ev, **c.summary()})
+            if ev not in exclude:
+                pooled += c
+        rows.append({"method": method, "event": "ALL", **pooled.summary()})
+    df = pd.DataFrame(rows)
+    df["base"] = df["method"].map(base_method)
+    df["order"] = df["base"].map({m: i for i, m in enumerate(ORDER)}).fillna(99)
+    return df.sort_values(["order", "method", "event"])
+
+
+def comparison_table(df, out, exclude):
     cols = {"flood_open_f1": "FO F1", "flood_urban_f1": "FU F1", "flood_mean_f1": "Mean flood F1",
             "flood_any_f1": "Any-flood F1", "flood_urban_precision": "FU precision",
             "flood_urban_recall": "FU recall", "kappa": "Kappa", "overall_accuracy": "OA"}
-    t = pooled[list(cols)].rename(columns=cols)
-    per_ev = df[df.event != "ALL"].pivot_table(index="method", columns="event",
-                                               values=["flood_open_f1", "flood_urban_f1"])
+    pooled = df[df.event == "ALL"]
+    g = pooled.groupby("base")
+    t = g[list(cols)].mean().rename(columns=cols)
+    t.insert(0, "Runs", g.size())
+    t.insert(2, "FO F1 sd", g["flood_open_f1"].std())
+    t.insert(4, "FU F1 sd", g["flood_urban_f1"].std())
+    ev = df[(df.event != "ALL") & ~df.event.isin(exclude)]
+    per_ev = ev.pivot_table(index="base", columns="event", values=["flood_open_f1", "flood_urban_f1"], aggfunc="mean")
     per_ev.columns = [f"{'FO' if a == 'flood_open_f1' else 'FU'} F1 {e}" for a, e in per_ev.columns]
     t = t.join(per_ev)
     t = t.loc[[m for m in ORDER if m in t.index] + [m for m in t.index if m not in ORDER]]
     t.index = [LABELS.get(m, m) for m in t.index]
     t.to_csv(out / "comparison.csv", float_format="%.4f")
-    (out / "comparison.md").write_text(t.to_markdown(floatfmt=".3f"))
-    print(t.iloc[:, :7].to_string(float_format=lambda v: f"{v:.3f}"))
+    fmt = t.copy().astype(object)
+    for c in t.columns:
+        fmt[c] = [str(int(v)) if c == "Runs" else ("" if pd.isna(v) else f"{v:.3f}") for v in t[c]]
+    note = f"\n\nPooled over test events excluding: {', '.join(exclude) or 'none'}. " \
+           "sd = standard deviation over random seeds (blank = single run).\n"
+    (out / "comparison.md").write_text(fmt.to_markdown() + note)
+    print(fmt.iloc[:, :8].to_string())
     return t
 
 
 def f1_bars(t, out):
     fig, ax = plt.subplots(figsize=(11, 5))
     x = np.arange(len(t))
-    ax.bar(x - 0.2, t["FO F1"], 0.4, label="Flooded open area", color="#1f77b4")
-    ax.bar(x + 0.2, t["FU F1"], 0.4, label="Flooded urban area", color="#d62728")
+    kw = dict(capsize=3, error_kw={"elinewidth": 1})
+    ax.bar(x - 0.2, t["FO F1"], 0.4, yerr=t["FO F1 sd"].fillna(0), label="Flooded open area", color="#1f77b4", **kw)
+    ax.bar(x + 0.2, t["FU F1"], 0.4, yerr=t["FU F1 sd"].fillna(0), label="Flooded urban area", color="#d62728", **kw)
     ax.set_xticks(x, t.index, rotation=35, ha="right", fontsize=8)
-    ax.set_ylabel("F1 (all test events pooled)")
+    ax.set_ylabel("F1 (test events pooled)")
     ax.set_ylim(0, 1)
     ax.legend()
     ax.grid(axis="y", alpha=0.3)
@@ -155,15 +195,18 @@ def main():
     ap.add_argument("--test-root", required=True)
     ap.add_argument("--out", default="report")
     ap.add_argument("--size", type=int, default=1024, help="map window size in pixels")
+    ap.add_argument("--exclude-events", nargs="*", default=[],
+                    help="events left out of pooled scores and per-event columns")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    df, run_dirs = find_metrics(args.runs)
+    run_dirs = find_runs(args.runs)
+    df = metrics_table(run_dirs, args.exclude_events)
     df.drop(columns="order").to_csv(out / "all_metrics.csv", index=False)
-    t = comparison_table(df, out)
+    t = comparison_table(df, out, args.exclude_events)
     f1_bars(t, out)
     for ev in sorted(df.event.unique()):
-        if ev != "ALL" and (Path(args.test_root) / ev / "GT_full.tif").exists():
+        if ev != "ALL" and ev not in args.exclude_events and (Path(args.test_root) / ev / "GT_full.tif").exists():
             map_figure(ev, args.test_root, run_dirs, out, args.size)
     print(f"report written to {out}")
 
