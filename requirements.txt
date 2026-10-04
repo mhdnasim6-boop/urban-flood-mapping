@@ -10,3 +10,4 @@ xgboost>=2.0
 pyyaml
 matplotlib
 tabulate
+opencv-python-headless   # fast median filter for baselines (optional)

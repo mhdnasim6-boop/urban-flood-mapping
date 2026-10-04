@@ -45,7 +45,7 @@ evaluated on held-out flood events.
 | B1 | Intensity change detection: Otsu water threshold + 3 dB decrease (open floods only) |
 | B2 | B1 + fixed coherence-drop threshold 0.3 in stable pixels |
 | B3 | Rule-based decision tree on intensity + event-normalised coherence (after Natsuaki & Hirose, 2018) |
-| B4 | Random forest on the same 17 per-pixel inputs |
+| B4 | Random forest on the same 17 per-pixel inputs, class weights tuned on the validation set |
 | B5 | U-Net, 8 raw bands, weighted cross-entropy: the dataset authors' setup |
 | A | U-Net, 8 raw bands, focal + Dice + class-aware sampling |
 | B | A + physics features (14 channels) |
@@ -53,6 +53,10 @@ evaluated on held-out flood events.
 | **D** | **Proposed: all 17 channels** (also evaluated with 20 MC-dropout passes) |
 | E | D without coherence |
 | F | D without VH |
+
+B1-B4 classify pixel by pixel on 5x5 median-filtered SAR (standard speckle suppression); thresholds
+are in `src/ufm/baselines.py` and the values used are saved to `runs/baselines/settings.json`.
+A and D are trained with three random seeds (42, 1, 2) and reported as mean +- sd.
 
 Comparisons: B5 vs A = training recipe; A vs B = physics features; A vs C = terrain/water context;
 A vs D = everything added; D vs E = value of coherence; D vs F = value of VH.
@@ -96,18 +100,24 @@ git remote add origin https://github.com/mhdnasim6-boop/urban-flood-mapping.git
 git push -u origin main
 ```
 
-### 3. Kaggle (in this order)
-Import the notebooks from `kaggle/` (*Create > New Notebook > File > Import Notebook*), set
-`GITHUB_REPO` in the first cell, then *Save Version > Save & Run All*:
+### 3. Kaggle
+Import each notebook from `kaggle/` as its own Kaggle notebook (*Create > New Notebook > File >
+Import Notebook*) and start it with **Save Version > Save & Run All (Commit)**. A committed run keeps
+going when your laptop is closed, and its output is saved. Every notebook prints the code version
+it cloned and stops within seconds if an input is missing.
 
-| Notebook | Accelerator | Output | Time (approx.) |
-|---|---|---|---|
-| `01_prepare_trainval.ipynb` | None | `ufm-trainval` (~17 GB) | 1-2 h |
-| `02_prepare_test.ipynb` | None | `ufm-test` (~4 GB) | 0.5-1 h |
-| `03_train_evaluate.ipynb` | GPU | `runs/`, `report/` | 6-8 h |
+| # | Notebook | Accelerator | Inputs | Output | Time (approx.) |
+|---|---|---|---|---|---|
+| 1 | `01_prepare_trainval` | None | - | `ufm-trainval` (~10 GB) | 1-1.5 h |
+| 2 | `02_prepare_test` | None | - | `ufm-test` (~3.3 GB) | 0.5-1 h |
+| 3 | `03_train_core` | GPU T4 x2 | 01, 02 | D, B5, A + 2 extra seeds of A and D | 4-6 h |
+| 4 | `04_train_ablation` | GPU T4 x2 | 01, 02 | B, C, E, F | 2-3 h |
+| 5 | `05_baselines` | None | 01, 02 | B1-B4 | 1.5-3 h |
+| 6 | `06_report` | None | 02, 03, 04, 05 | `report/` | 15-30 min |
 
-For notebook 03, add the outputs of 01 and 02 as inputs (*Add Input > Your Work*). The report
-contains `comparison.md`, `f1_bars.png` and `maps_<event>.png` for the presentation.
+01 and 02 can run at the same time; 03, 04 and 05 can start once both are finished. The training
+notebooks use both T4 GPUs, training two models at a time (`scripts/run_queue.py`). The total GPU
+quota needed is about 6-9 hours. Download `report/` from notebook 06's Output tab.
 
 ## Layout
 ```
@@ -119,11 +129,13 @@ scripts/prepare_test.py         download the held-out test events
 scripts/build_aux.py            HAND, slope, JRC water per chip
 scripts/compute_stats.py        normalisation statistics
 scripts/train.py                train one experiment
+scripts/run_queue.py            train + evaluate a list of experiments, one per GPU
 scripts/evaluate.py             test metrics + maps (+ MC-dropout uncertainty)
 scripts/run_baselines.py        B1-B4
 scripts/summarize.py            comparison table and figures
+scripts/uncertainty_analysis.py does the MC-dropout uncertainty flag the errors?
 scripts/smoke_test.py           end-to-end local check
-kaggle/                         notebooks that run the scripts on Kaggle
+kaggle/                         notebooks that run the scripts on Kaggle (make_notebooks.py writes them)
 ```
 
 ## References

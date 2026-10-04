@@ -68,20 +68,11 @@ def main():
         shutil.rmtree(tv)
     fake_trainval(test, args.event, tv)
     run("scripts/compute_stats.py", "--root", tv)
-    for cfg in ("B5_authors_baseline", "D_full"):
-        run("scripts/train.py", "--config", f"configs/experiments/{cfg}.yaml", "--data-root", tv,
-            "--out", runs, "--device", args.device, "train.epochs=2", "train.val_every=1",
-            "train.batch_size=4", "data.num_workers=0")
-        run("scripts/evaluate.py", "--run", runs / cfg, "--test-root", test, "--mc", 0,
-            "--device", args.device, "--workers", 0, "--batch", 8)
-    run("scripts/evaluate.py", "--run", runs / "D_full", "--test-root", test, "--mc", 3, "--tag", "mc",
-        "--device", args.device, "--workers", 0, "--batch", 8)
-    # an extra random seed, evaluated without maps (as in the Kaggle notebook)
-    run("scripts/train.py", "--config", "configs/experiments/D_full.yaml", "--data-root", tv,
-        "--out", runs, "--device", args.device, "train.epochs=1", "train.val_every=1",
-        "train.batch_size=4", "data.num_workers=0", "train.seed=1", "name=D_full_s1")
-    run("scripts/evaluate.py", "--run", runs / "D_full_s1", "--test-root", test, "--mc", 0, "--no-maps",
-        "--device", args.device, "--workers", 0, "--batch", 8)
+    # same runner as the Kaggle training notebooks (CPU, one worker, tiny schedule)
+    run("scripts/run_queue.py", "B5_authors_baseline", "D_full", "D_full@1",
+        "--trainval-root", tv, "--test-root", test, "--out", runs, "--mc", "D_full",
+        "--device", args.device, "--gpus", 1, "--workers", 0,
+        "--extra", "train.epochs=2", "train.val_every=1", "train.batch_size=4")
     run("scripts/run_baselines.py", "--test-root", test, "--trainval-root", tv, "--out", runs / "baselines",
         "--rf-device", "cpu", "--rf-max-chips", 30, "--workers", 0)
     run("scripts/uncertainty_analysis.py", "--maps", runs / "D_full" / "test_mc", "--test-root", test,

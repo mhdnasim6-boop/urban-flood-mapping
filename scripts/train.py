@@ -110,7 +110,7 @@ def main():
     t0 = time.time()
     for ep in range(1, tc["epochs"] + 1):
         model.train()
-        run_loss, n = 0.0, 0
+        run_loss, n = torch.zeros((), device=dev), 0
         for b in dl_tr:
             raw, aux, off, y = to_dev(b, dev)
             y[~valid_mask(raw)] = 255
@@ -121,9 +121,9 @@ def main():
             scaler.step(opt)
             scaler.update()
             sched.step()
-            run_loss += loss.item()
+            run_loss += loss.detach()  # no per-step GPU sync
             n += 1
-        row = {"epoch": ep, "train_loss": run_loss / max(n, 1), "lr": opt.param_groups[0]["lr"],
+        row = {"epoch": ep, "train_loss": run_loss.item() / max(n, 1), "lr": opt.param_groups[0]["lr"],
                "minutes": (time.time() - t0) / 60}
         if ep % tc["val_every"] == 0 or ep == tc["epochs"]:
             v = validate(model, dl_va, dev, amp)

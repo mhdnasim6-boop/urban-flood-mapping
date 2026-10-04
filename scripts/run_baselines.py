@@ -38,7 +38,7 @@ def event_water_threshold(ds, speckle, n_chips=300, px=3000, seed=0):
     rng = np.random.default_rng(seed)
     vals = []
     for i in rng.permutation(len(ds))[:n_chips]:
-        v = bl.despeckle(ds[i]["raw"][None], speckle)[0, 7].numpy().ravel()  # int_post_vv
+        v = bl.despeckle(ds[i]["raw"][None], speckle, bands=[7])[0, 7].numpy().ravel()  # int_post_vv
         vals.append(rng.choice(v, size=min(px, v.size), replace=False))
     return bl.water_threshold(np.concatenate(vals))
 

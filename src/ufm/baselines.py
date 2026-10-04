@@ -36,19 +36,32 @@ T = {
 }
 
 
-def despeckle(raw, size=5):
-    """Median-filter every SAR band of a batch (B,8,H,W); NaN pixels stay NaN."""
+try:  # OpenCV's median filter is ~20x faster than SciPy's (float32 supports size 3 or 5)
+    import cv2
+except ImportError:
+    cv2 = None
+
+
+def _median(x, size):
+    if cv2 is not None and size in (3, 5):
+        return cv2.medianBlur(np.ascontiguousarray(x, dtype=np.float32), size)
+    return median_filter(x, size=size, mode="nearest")
+
+
+def despeckle(raw, size=5, bands=None):
+    """Median-filter SAR bands of a batch (B,8,H,W); NaN pixels stay NaN.
+    bands: indices to filter (default all)."""
     if not size:
         return raw
     a = raw.numpy().astype(np.float32, copy=True)
     for b in range(a.shape[0]):
-        for c in range(a.shape[1]):
+        for c in (range(a.shape[1]) if bands is None else bands):
             x = a[b, c]
             ok = np.isfinite(x)
             if not ok.any():
                 continue
             filled = np.where(ok, x, np.median(x[ok]))
-            a[b, c] = np.where(ok, median_filter(filled, size=size, mode="reflect"), np.nan)
+            a[b, c] = np.where(ok, _median(filled, size), np.nan)
     return torch.from_numpy(a)
 
 
@@ -128,7 +141,7 @@ def sample_uniform(dataset, max_chips=600, px_per_chip=20000, speckle=5, seed=1)
     return np.concatenate(X).astype(np.float32), np.concatenate(Y).astype(np.int64)
 
 
-def train_rf(X, y, device="cpu", n_trees=150, depth=14, seed=0):
+def train_rf(X, y, device="cpu", n_trees=100, depth=12, seed=0):
     import xgboost as xgb
     rf = xgb.XGBRFClassifier(n_estimators=n_trees, max_depth=depth, subsample=0.8,
                              colsample_bynode=0.6, tree_method="hist", device=device,
