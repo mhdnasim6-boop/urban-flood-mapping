@@ -42,7 +42,7 @@ evaluated on held-out flood events.
 
 | ID | Method |
 |---|---|
-| B1 | Intensity change detection: Otsu water threshold + 3 dB decrease (open floods only) |
+| B1 | Intensity change detection: split-based Otsu water threshold (Chini et al., 2017) + 3 dB decrease (open floods only) |
 | B2 | B1 + fixed coherence-drop threshold 0.3 in stable pixels |
 | B3 | Rule-based decision tree on intensity + event-normalised coherence (after Natsuaki & Hirose, 2018) |
 | B4 | Random forest on the same 17 per-pixel inputs, class weights tuned on the validation set |

@@ -1,7 +1,8 @@
 """Comparison methods B1-B4.
 
-B1  Intensity change detection (open floods only): Otsu water threshold on
-    post-event VV + a -3 dB decrease, the standard operational approach.
+B1  Intensity change detection (open floods only): water threshold on post-event
+    VV from split-based Otsu (simplified HSBA, Chini et al. 2017: Otsu only on
+    tiles that clearly contain both water and land) + a -3 dB decrease.
 B2  B1 + fixed coherence-drop threshold (0.3) inside stable/urban pixels, the
     rule most urban-flood studies use (e.g. Chini et al. 2019; Bioresita et al.
     2021) and also how the dataset's semi-automatic urban labels were made.
@@ -26,7 +27,10 @@ from .features import compute_all_channels
 CH = {n: i for i, n in enumerate(ALL_CHANNELS)}
 
 T = {
-    "water_db_range": (-24.0, -15.0),  # clamp for the Otsu water threshold
+    "water_db_range": (-24.0, -12.0),  # sanity range for the event water threshold
+    "water_dark_mean_db": -15.0,       # a tile's dark class must look like water
+    "water_fallback_db": -18.0,        # used only if no tile is bimodal
+    "tile": 128,                       # tile size (pixels) for split-based Otsu
     "decrease_db": -3.0,               # intensity decrease for open water
     "strong_decrease_db": -6.0,        # B3 rule 1
     "strong_increase_db": 6.0,         # B3 double-bounce rule
@@ -71,10 +75,33 @@ def features(raw, aux, off):
         return compute_all_channels(raw.float(), aux.float(), off.float()).numpy()
 
 
-def water_threshold(post_vv_sample):
-    s = post_vv_sample[np.isfinite(post_vv_sample)]
-    t = threshold_otsu(s) if s.size > 100 else -18.0
-    return float(np.clip(t, *T["water_db_range"]))
+def tile_threshold(v):
+    """Otsu threshold of one tile if it is clearly bimodal (water + land), else None.
+
+    Selection criteria of split-based thresholding (Chini et al. 2017): Ashman's
+    D > 2 between the two Otsu classes, each class >= 10% of the tile, and a dark
+    class whose mean looks like open water.
+    """
+    v = v[np.isfinite(v)]
+    if v.size < 1000:
+        return None
+    t = threshold_otsu(v)
+    lo, hi = v[v < t], v[v >= t]
+    if not 0.1 <= lo.size / v.size <= 0.9:
+        return None
+    ashman_d = np.sqrt(2) * abs(hi.mean() - lo.mean()) / np.sqrt(lo.var() + hi.var() + 1e-6)
+    if ashman_d <= 2 or lo.mean() > T["water_dark_mean_db"]:
+        return None
+    return float(t)
+
+
+def water_threshold(tiles):
+    """Event water threshold = median of the bimodal tiles' Otsu thresholds.
+    Returns (threshold_db, number_of_tiles_used)."""
+    ts = [t for t in map(tile_threshold, tiles) if t is not None]
+    if not ts:
+        return T["water_fallback_db"], 0
+    return float(np.clip(np.median(ts), *T["water_db_range"])), len(ts)
 
 
 def _open_water(f, t_water):
@@ -150,7 +177,7 @@ def train_rf(X, y, device="cpu", n_trees=100, depth=12, seed=0):
     return rf
 
 
-def tune_class_weights(proba, y, grid=np.logspace(-2, 1, 16)):
+def tune_class_weights(proba, y, grid=np.logspace(-6, 2, 33)):
     """Pick multipliers (w_FO, w_FU) for argmax(p * [1, w_FO, w_FU]) that maximise
     the mean F1 of the two flood classes on validation pixels."""
     from .metrics import Confusion
@@ -162,7 +189,10 @@ def tune_class_weights(proba, y, grid=np.logspace(-2, 1, 16)):
             score = c.summary()["flood_mean_f1"]
             if score > best[0]:
                 best = (score, float(w1), float(w2))
-    return {"val_flood_mean_f1": best[0], "weights": [1.0, best[1], best[2]]}
+    edge = [w for w in best[1:] if w in (grid[0], grid[-1])]
+    if edge:
+        print(f"WARNING: tuned class weight {edge} is at the edge of the search grid")
+    return {"val_flood_mean_f1": best[0], "weights": [1.0, best[1], best[2]], "at_grid_edge": bool(edge)}
 
 
 def predict_rf(rf, f, weights=(1.0, 1.0, 1.0)):

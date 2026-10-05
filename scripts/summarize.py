@@ -34,7 +34,7 @@ SEED_RE = re.compile(r"^(.*)_s\d+$")
 ORDER = ["B1", "B2", "B3", "B4", "B5_authors_baseline", "A_raw", "B_raw_phys", "C_raw_aux",
          "D_full", "D_full_mc", "E_no_coherence", "F_no_vh"]
 LABELS = {
-    "B1": "B1 Intensity change (Otsu)", "B2": "B2 Coherence threshold 0.3",
+    "B1": "B1 Intensity change (split Otsu)", "B2": "B2 Coherence threshold 0.3",
     "B3": "B3 Rule-based tree", "B4": "B4 Random forest (17 inputs)",
     "B5_authors_baseline": "B5 U-Net, 8 bands, WCE (dataset authors)",
     "A_raw": "A U-Net 8 bands + focal-Dice", "B_raw_phys": "B + physics features",

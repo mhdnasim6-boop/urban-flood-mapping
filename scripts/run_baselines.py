@@ -34,13 +34,15 @@ if sys.platform == "darwin":  # macOS: torch and xgboost ship separate OpenMP ru
     torch.set_num_threads(1)
 
 
-def event_water_threshold(ds, speckle, n_chips=300, px=3000, seed=0):
+def event_water_threshold(ds, speckle, n_chips=1000, seed=0):
+    """Split-based Otsu over tiles of up to n_chips chips of the event."""
     rng = np.random.default_rng(seed)
-    vals = []
+    k = bl.T["tile"]
+    tiles = []
     for i in rng.permutation(len(ds))[:n_chips]:
-        v = bl.despeckle(ds[i]["raw"][None], speckle, bands=[7])[0, 7].numpy().ravel()  # int_post_vv
-        vals.append(rng.choice(v, size=min(px, v.size), replace=False))
-    return bl.water_threshold(np.concatenate(vals))
+        v = bl.despeckle(ds[i]["raw"][None], speckle, bands=[7])[0, 7].numpy()  # int_post_vv
+        tiles += [v[r:r + k, c:c + k] for r in range(0, v.shape[0] - k + 1, k) for c in range(0, v.shape[1] - k + 1, k)]
+    return bl.water_threshold(tiles)
 
 
 def main():
@@ -90,9 +92,10 @@ def main():
     conf = {m: {} for m in args.methods}
     for ev, items in by_event.items():
         ds = ChipDataset(items, ev_stats, use_aux="B4" in args.methods)
-        t_water = event_water_threshold(ds, args.speckle)
-        settings["water_threshold_db"][ev] = t_water
-        print(f"{ev}: {len(items)} chips, Otsu water threshold {t_water:.1f} dB", flush=True)
+        t_water, n_tiles = event_water_threshold(ds, args.speckle)
+        settings["water_threshold_db"][ev] = {"threshold": t_water, "bimodal_tiles": n_tiles}
+        print(f"{ev}: {len(items)} chips, split-based water threshold {t_water:.1f} dB "
+              f"from {n_tiles} bimodal tiles", flush=True)
         bounds = chip_bounds(items)
         mos = {} if args.no_maps else {m: EventMosaic(items[0].gt, ["pred"]) for m in args.methods}
         cm = {m: Confusion() for m in args.methods}
